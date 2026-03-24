@@ -1,31 +1,50 @@
 {% extends "base.html" %}
-{% block title %}Login – ScholarMate{% endblock %}
+{% block title %}ScholarMate – arXiv Paper Recommendations{% endblock %}
 
 {% block body %}
-<div class="auth-wrap">
-  <div class="auth-card">
-    <h1>📄 ScholarMate</h1>
-    <p class="subtitle">arXiv paper recommendations, personalized for you.</p>
+<div class="hero-wrap">
 
-    {% if request.args.get('registered') %}
-    <div class="alert alert-ok">Account created! Please log in.</div>
-    {% endif %}
-
-    {% if error %}
-    <div class="alert alert-err">{{ error }}</div>
-    {% endif %}
-
-    <form method="post">
-      <label>Email</label>
-      <input type="email" name="email" required autofocus placeholder="you@example.com">
-
-      <label>Password</label>
-      <input type="password" name="password" required placeholder="••••••">
-
-      <button type="submit" class="btn-primary full">Log In</button>
-    </form>
-
-    <p class="switch">Don't have an account? <a href="{{ url_for('register') }}">Register</a></p>
+  <!-- ── Left: intro ── -->
+  <div class="hero-left">
+    <div class="hero-logo">📄</div>
+    <h1 class="hero-title">ScholarMate</h1>
+    <p class="hero-desc">
+      Stay on top of your field.<br>
+      Get the latest arXiv papers matched to your research, every day.
+    </p>
+    <ul class="hero-features">
+      <li>🎓 Reads your Google Scholar profile automatically</li>
+      <li>🔍 Searches arXiv for the most relevant new papers</li>
+      <li>📬 Delivers your personalized Top-K list on demand</li>
+    </ul>
   </div>
+
+  <!-- ── Right: login card ── -->
+  <div class="hero-right">
+    <div class="auth-card">
+      <h2>Welcome back</h2>
+
+      {% if request.args.get('registered') %}
+      <div class="alert alert-ok">Account created! Please log in.</div>
+      {% endif %}
+
+      {% if error %}
+      <div class="alert alert-err">{{ error }}</div>
+      {% endif %}
+
+      <form method="post">
+        <label>Email</label>
+        <input type="email" name="email" required autofocus placeholder="you@example.com">
+
+        <label>Password</label>
+        <input type="password" name="password" required placeholder="••••••">
+
+        <button type="submit" class="btn-primary full">Log In</button>
+      </form>
+
+      <p class="switch">No account? <a href="{{ url_for('register') }}">Register free →</a></p>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
