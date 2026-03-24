@@ -35,18 +35,50 @@ a:hover { text-decoration: underline; }
 }
 .btn-secondary:hover { background: #e8f0fe; }
 
-/* ── Auth ── */
-.auth-wrap {
-  min-height: 100vh; display: flex;
-  align-items: center; justify-content: center;
+/* ── Hero (login page) ── */
+.hero-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 64px;
+  padding: 40px 32px;
+  background: linear-gradient(135deg, #0f1f5c 0%, #1a73e8 60%, #34a8eb 100%);
 }
+
+.hero-left {
+  flex: 1;
+  max-width: 460px;
+  color: #fff;
+}
+.hero-logo { font-size: 52px; margin-bottom: 12px; }
+.hero-title { font-size: 42px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 16px; }
+.hero-desc  { font-size: 18px; line-height: 1.6; opacity: 0.9; margin-bottom: 32px; }
+
+.hero-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hero-features li {
+  font-size: 15px;
+  opacity: 0.88;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-right { flex: none; width: 380px; }
+
+/* ── Auth card ── */
 .auth-card {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 12px; padding: 40px 36px;
-  width: 100%; max-width: 400px; box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px 36px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.18);
 }
-.auth-card h1  { font-size: 22px; margin-bottom: 6px; }
-.auth-card .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+.auth-card h2  { font-size: 22px; font-weight: 700; margin-bottom: 20px; color: var(--text); }
 
 .auth-card form label {
   display: block; font-size: 13px; font-weight: 500;
@@ -150,3 +182,16 @@ nav {
 }
 
 .empty { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 14px; }
+
+/* ── Responsive ── */
+@media (max-width: 780px) {
+  .hero-wrap { flex-direction: column; gap: 32px; padding: 32px 20px; }
+  .hero-left  { max-width: 100%; text-align: center; }
+  .hero-logo  { font-size: 40px; }
+  .hero-title { font-size: 32px; }
+  .hero-desc  { font-size: 16px; }
+  .hero-features { align-items: center; }
+  .hero-right { width: 100%; }
+  .auth-card  { padding: 32px 24px; }
+}
+
