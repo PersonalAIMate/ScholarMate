@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "ScholarMate",
+  "version": "1.0",
+  "description": "Recommends top research papers from arXiv based on your Google Scholar profile or custom keywords",
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://export.arxiv.org/*",
+    "https://scholar.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ScholarMate"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

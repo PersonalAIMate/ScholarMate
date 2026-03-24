@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+  <title>ScholarMate – Settings</title>
+</head>
+<body class="options-body">
+
+  <h1>📄 ScholarMate</h1>
+  <p class="subtitle">Configure your paper recommendation preferences.</p>
+
+  <!-- ── Email ── -->
+  <div class="section-title">Delivery</div>
+
+  <div class="form-group">
+    <label for="email">Your Email Address *</label>
+    <input type="email" id="email" placeholder="you@example.com">
+    <p class="hint">Recommendations will be sent here via your default mail app.</p>
+  </div>
+
+  <!-- ── Source ── -->
+  <div class="section-title">Paper Source (choose one or both)</div>
+
+  <div class="form-group">
+    <label for="scholarUrl">Google Scholar Profile URL</label>
+    <input type="url" id="scholarUrl"
+      placeholder="https://scholar.google.com/citations?user=XXXXXXX">
+    <p class="hint">
+      The extension will read your research interests and paper titles automatically.
+      Leave blank if you don't have a Scholar profile.
+    </p>
+  </div>
+
+  <div class="or-divider">or use keywords below</div>
+
+  <div class="form-group">
+    <label for="keywords">Keywords (comma-separated)</label>
+    <textarea id="keywords"
+      placeholder="machine learning, computer vision, neural networks, transformer"></textarea>
+    <p class="hint">Used when Scholar URL is absent or when Scholar fetch fails.</p>
+  </div>
+
+  <!-- ── Options ── -->
+  <div class="section-title">Preferences</div>
+
+  <div class="form-group">
+    <label for="topK">Number of recommendations</label>
+    <input type="number" id="topK" min="1" max="50" value="10" style="width:100px">
+    <p class="hint">How many top papers to show and email (1–50).</p>
+  </div>
+
+  <div class="form-group">
+    <label for="schedule">Auto-refresh schedule</label>
+    <select id="schedule">
+      <option value="manual">Manual only</option>
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+    </select>
+    <p class="hint">
+      When set to Daily or Weekly, the extension pre-fetches papers in the background
+      so they appear instantly when you open the popup.
+    </p>
+  </div>
+
+  <!-- ── Save ── -->
+  <div class="save-row">
+    <button id="saveBtn" class="btn-primary">Save Settings</button>
+    <span id="saveMsg" class="save-msg hidden">✓ Saved!</span>
+  </div>
+
+</body>
+<script src="options.js"></script>
+</html>

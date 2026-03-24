@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Register – ScholarMate{% endblock %}
+
+{% block body %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h1>📄 ScholarMate</h1>
+    <p class="subtitle">Create your account to get started.</p>
+
+    {% if error %}
+    <div class="alert alert-err">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+      <label>Email</label>
+      <input type="email" name="email" required autofocus placeholder="you@example.com">
+
+      <label>Password <span class="hint">(min. 6 characters)</span></label>
+      <input type="password" name="password" required placeholder="••••••">
+
+      <button type="submit" class="btn-primary full">Create Account</button>
+    </form>
+
+    <p class="switch">Already have an account? <a href="{{ url_for('login') }}">Log In</a></p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+  <title>ScholarMate</title>
+</head>
+<body class="popup-body">
+
+  <div class="header">
+    <h2>📄 ScholarMate</h2>
+    <a id="settingsLink" href="#">⚙ Settings</a>
+  </div>
+
+  <!-- Warning if not configured -->
+  <div id="configWarning" class="warning hidden">
+    Please set up your email and keywords first.
+    <br><a id="configLink" href="#">Open Settings →</a>
+  </div>
+
+  <div id="mainSection" class="hidden">
+    <div class="info-bar">
+      <span id="sourceInfo"></span>
+      <span id="topkInfo"></span>
+      <span id="scheduleInfo"></span>
+    </div>
+
+    <div class="actions">
+      <button id="findBtn" class="btn-primary">🔍 Find Papers</button>
+      <button id="emailBtn" class="btn-secondary hidden">📧 Email</button>
+    </div>
+
+    <div id="loading" class="loading hidden">
+      <span class="spinner"></span> Searching arXiv…
+    </div>
+
+    <div id="error" class="error hidden"></div>
+
+    <div id="results" class="results"></div>
+  </div>
+
+</body>
+<script src="popup.js"></script>
+</html>

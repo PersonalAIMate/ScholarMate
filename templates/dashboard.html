@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}ScholarMate{% endblock %}
+
+{% block body %}
+<!-- ── Nav ── -->
+<nav>
+  <span class="logo">📄 ScholarMate</span>
+  <span class="nav-right">
+    <span class="email">{{ user['email'] }}</span>
+    <a href="{{ url_for('logout') }}">Log out</a>
+  </span>
+</nav>
+
+<div class="container">
+
+  <!-- ── Settings ── -->
+  <details class="settings-card" {% if not user['scholar_url'] and not user['keywords'] %}open{% endif %}>
+    <summary>⚙ Settings</summary>
+    <form method="post" action="{{ url_for('settings') }}" class="settings-form">
+
+      <div class="field">
+        <label>Google Scholar Profile URL <span class="hint">optional</span></label>
+        <input type="url" name="scholar_url" value="{{ user['scholar_url'] }}"
+               placeholder="https://scholar.google.com/citations?user=XXXXXXX">
+        <p class="field-hint">The app reads your research interests and paper titles automatically.</p>
+      </div>
+
+      <div class="or-div">— or —</div>
+
+      <div class="field">
+        <label>Keywords <span class="hint">comma-separated, used when Scholar is absent or fails</span></label>
+        <textarea name="keywords" rows="2"
+                  placeholder="machine learning, computer vision, transformer">{{ user['keywords'] }}</textarea>
+      </div>
+
+      <div class="field inline">
+        <label>Top K</label>
+        <input type="number" name="top_k" value="{{ user['top_k'] }}" min="1" max="50" style="width:70px">
+        <span class="field-hint">papers to recommend (1–50)</span>
+      </div>
+
+      <button type="submit" class="btn-secondary">Save</button>
+    </form>
+  </details>
+
+  <!-- ── Papers ── -->
+  <div class="papers-header">
+    <h2>
+      Recommendations
+      {% if cache_age is not none %}
+      <span class="cache-age">
+        (cached {{ 'just now' if cache_age < 2 else cache_age|string + 'm ago' }})
+      </span>
+      {% endif %}
+    </h2>
+    <button id="refreshBtn" class="btn-primary" onclick="fetchPapers()">🔄 Refresh</button>
+  </div>
+
+  <div id="status" class="status hidden"></div>
+
+  <div id="paperList">
+    {% if not user['scholar_url'] and not user['keywords'] %}
+      <div class="empty">Set up your Scholar URL or keywords above to get recommendations.</div>
+    {% elif papers %}
+      {% for p in papers %}
+      <div class="paper-card">
+        <a class="paper-title" href="{{ p.link }}" target="_blank">{{ loop.index }}. {{ p.title }}</a>
+        <div class="paper-meta">
+          {{ p.authors[:3] | join(', ') }}{% if p.authors | length > 3 %} et al.{% endif %}
+          · {{ p.published }}
+        </div>
+        {% if p.summary %}
+        <div class="paper-abstract">{{ p.summary[:300] }}…</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">No cached results yet. Click <strong>Refresh</strong> to fetch papers.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+async function fetchPapers() {
+  const btn    = document.getElementById('refreshBtn');
+  const status = document.getElementById('status');
+  const list   = document.getElementById('paperList');
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ Fetching…';
+  status.textContent = 'Searching arXiv – this may take a few seconds…';
+  status.className = 'status info';
+
+  try {
+    const resp = await fetch('/api/papers');
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      status.textContent = '❌ Error: ' + (data.error || resp.statusText);
+      status.className = 'status error';
+      return;
+    }
+
+    if (data.papers.length === 0) {
+      const kw = (data.keywords || []).join(', ') || '(none – check settings)';
+      list.innerHTML = `<div class="empty">No papers found.<br><small>Keywords used: <b>${esc(kw)}</b></small><br><small>Try adding more keywords in Settings.</small></div>`;
+      status.textContent = 'Done – no results found.';
+      status.className = 'status info';
+      return;
+    }
+
+    list.innerHTML = data.papers.map((p, i) => {
+      const authors = p.authors.slice(0, 3).join(', ') + (p.authors.length > 3 ? ' et al.' : '');
+      const abstract = p.summary ? p.summary.substring(0, 300) + '…' : '';
+      const link = p.link.replace('http://', 'https://');
+      return `
+        <div class="paper-card">
+          <a class="paper-title" href="${link}" target="_blank">${i+1}. ${esc(p.title)}</a>
+          <div class="paper-meta">${esc(authors)} · ${p.published}</div>
+          ${abstract ? `<div class="paper-abstract">${esc(abstract)}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    const kw = (data.keywords || []).join(', ');
+    status.textContent = `✓ Found ${data.papers.length} papers. Keywords: ${kw}`;
+    status.className = 'status ok';
+  } catch (e) {
+    status.textContent = '❌ Network error: ' + e.message;
+    status.className = 'status error';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '🔄 Refresh';
+  }
+}
+
+function esc(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}
