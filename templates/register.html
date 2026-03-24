@@ -2,26 +2,58 @@
 {% block title %}Register – ScholarMate{% endblock %}
 
 {% block body %}
-<div class="auth-wrap">
-  <div class="auth-card">
-    <h1>📄 ScholarMate</h1>
-    <p class="subtitle">Create your account to get started.</p>
+<div class="hero-wrap">
 
-    {% if error %}
-    <div class="alert alert-err">{{ error }}</div>
-    {% endif %}
-
-    <form method="post">
-      <label>Email</label>
-      <input type="email" name="email" required autofocus placeholder="you@example.com">
-
-      <label>Password <span class="hint">(min. 6 characters)</span></label>
-      <input type="password" name="password" required placeholder="••••••">
-
-      <button type="submit" class="btn-primary full">Create Account</button>
-    </form>
-
-    <p class="switch">Already have an account? <a href="{{ url_for('login') }}">Log In</a></p>
+  <div class="hero-left">
+    <div class="hero-badge">✦ Free to use</div>
+    <h1 class="hero-title">
+      Your personal<br>
+      <span>paper radar</span>
+    </h1>
+    <p class="hero-desc">
+      Set up once, get matched every time.<br>
+      Paste your Scholar URL and ScholarMate handles the rest.
+    </p>
+    <ul class="hero-features">
+      <li>
+        <div class="feat-icon">🆓</div>
+        <div class="feat-text">
+          <strong>Always free</strong>
+          <span>Powered by the open arXiv API, no credit card needed</span>
+        </div>
+      </li>
+      <li>
+        <div class="feat-icon">🔒</div>
+        <div class="feat-text">
+          <strong>Private</strong>
+          <span>Your data stays in your account, never shared</span>
+        </div>
+      </li>
+    </ul>
   </div>
+
+  <div class="hero-right">
+    <div class="auth-card">
+      <h2>Create account</h2>
+      <p class="auth-sub">Takes 30 seconds, no credit card</p>
+
+      {% if error %}
+      <div class="alert alert-err">{{ error }}</div>
+      {% endif %}
+
+      <form method="post">
+        <label>Email</label>
+        <input type="email" name="email" required autofocus placeholder="you@example.com">
+
+        <label>Password <span class="hint">(min. 6 characters)</span></label>
+        <input type="password" name="password" required placeholder="••••••">
+
+        <button type="submit" class="btn-primary full">Create Account →</button>
+      </form>
+
+      <p class="switch">Already have an account? <a href="{{ url_for('login') }}">Log in →</a></p>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

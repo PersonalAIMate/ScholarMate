@@ -4,28 +4,65 @@
 {% block body %}
 <div class="hero-wrap">
 
-  <!-- ── Left: intro ── -->
+  <!-- ── Left: brand + features ── -->
   <div class="hero-left">
-    <div class="hero-logo">📄</div>
-    <h1 class="hero-title">ScholarMate</h1>
+    <div class="hero-badge">✦ AI-Powered Research Tool</div>
+
+    <h1 class="hero-title">
+      Stay ahead in<br>
+      your <span>research field</span>
+    </h1>
     <p class="hero-desc">
-      Stay on top of your field.<br>
-      Get the latest arXiv papers matched to your research, every day.
+      ScholarMate reads your Google Scholar profile and delivers the most relevant new arXiv papers — personalized, ranked, and ready to read.
     </p>
+
     <ul class="hero-features">
-      <li>🎓 Reads your Google Scholar profile automatically</li>
-      <li>🔍 Searches arXiv for the most relevant new papers</li>
-      <li>📬 Delivers your personalized Top-K list on demand</li>
+      <li>
+        <div class="feat-icon">🎓</div>
+        <div class="feat-text">
+          <strong>Scholar-aware</strong>
+          <span>Reads your research interests &amp; paper history automatically</span>
+        </div>
+      </li>
+      <li>
+        <div class="feat-icon">🔍</div>
+        <div class="feat-text">
+          <strong>arXiv search</strong>
+          <span>Scans latest submissions and ranks them by relevance</span>
+        </div>
+      </li>
+      <li>
+        <div class="feat-icon">⚡</div>
+        <div class="feat-text">
+          <strong>Instant results</strong>
+          <span>Cached recommendations load immediately on every visit</span>
+        </div>
+      </li>
     </ul>
+
+    <!-- Mock paper preview -->
+    <div class="hero-preview">
+      <div class="preview-card">
+        <div class="pc-tag">📄 Top match</div>
+        <div class="pc-title">Scalable Reinforcement Learning from Human Feedback with Verified Reward Models</div>
+        <div class="pc-meta">Chen et al. · 2026-03-21 · arXiv:2603.xxxxx</div>
+      </div>
+      <div class="preview-card">
+        <div class="pc-tag">📄 #2</div>
+        <div class="pc-title">Multi-Agent Policy Gradient Methods: A Unified Convergence Analysis</div>
+        <div class="pc-meta">Liu et al. · 2026-03-20 · arXiv:2603.xxxxx</div>
+      </div>
+    </div>
   </div>
 
-  <!-- ── Right: login card ── -->
+  <!-- ── Right: login form ── -->
   <div class="hero-right">
     <div class="auth-card">
       <h2>Welcome back</h2>
+      <p class="auth-sub">Sign in to see your recommendations</p>
 
       {% if request.args.get('registered') %}
-      <div class="alert alert-ok">Account created! Please log in.</div>
+      <div class="alert alert-ok">✓ Account created! Please log in.</div>
       {% endif %}
 
       {% if error %}
@@ -39,10 +76,12 @@
         <label>Password</label>
         <input type="password" name="password" required placeholder="••••••">
 
-        <button type="submit" class="btn-primary full">Log In</button>
+        <button type="submit" class="btn-primary full">Log In →</button>
       </form>
 
-      <p class="switch">No account? <a href="{{ url_for('register') }}">Register free →</a></p>
+      <p class="switch">
+        No account yet? <a href="{{ url_for('register') }}">Create one free →</a>
+      </p>
     </div>
   </div>
 

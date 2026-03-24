@@ -2,54 +2,63 @@
 {% block title %}ScholarMate{% endblock %}
 
 {% block body %}
+
 <!-- ── Nav ── -->
 <nav>
-  <span class="logo">📄 ScholarMate</span>
-  <span class="nav-right">
-    <span class="email">{{ user['email'] }}</span>
+  <span class="nav-logo">📄 Scholar<span>Mate</span></span>
+  <div class="nav-right">
+    <span class="nav-email">{{ user['email'] }}</span>
     <a href="{{ url_for('logout') }}">Log out</a>
-  </span>
+  </div>
 </nav>
 
 <div class="container">
 
   <!-- ── Settings ── -->
   <details class="settings-card" {% if not user['scholar_url'] and not user['keywords'] %}open{% endif %}>
-    <summary>⚙ Settings</summary>
+    <summary>
+      <div class="sum-icon">⚙</div>
+      Settings
+      <span class="sum-arrow">▼</span>
+    </summary>
+
     <form method="post" action="{{ url_for('settings') }}" class="settings-form">
 
       <div class="field">
         <label>Google Scholar Profile URL <span class="hint">optional</span></label>
         <input type="url" name="scholar_url" value="{{ user['scholar_url'] }}"
                placeholder="https://scholar.google.com/citations?user=XXXXXXX">
-        <p class="field-hint">The app reads your research interests and paper titles automatically.</p>
+        <p class="field-hint">ScholarMate reads your research interests and paper titles automatically.</p>
       </div>
 
-      <div class="or-div">— or —</div>
+      <div class="or-div">— or set keywords manually —</div>
 
       <div class="field">
-        <label>Keywords <span class="hint">comma-separated, used when Scholar is absent or fails</span></label>
-        <textarea name="keywords" rows="2"
-                  placeholder="machine learning, computer vision, transformer">{{ user['keywords'] }}</textarea>
+        <label>Keywords <span class="hint">comma-separated</span></label>
+        <textarea name="keywords"
+                  placeholder="reinforcement learning, multi-agent, LLM, computer vision">{{ user['keywords'] }}</textarea>
+        <p class="field-hint">Used when Scholar URL is absent or when Scholar is unavailable.</p>
       </div>
 
       <div class="field inline">
         <label>Top K</label>
         <input type="number" name="top_k" value="{{ user['top_k'] }}" min="1" max="50" style="width:70px">
-        <span class="field-hint">papers to recommend (1–50)</span>
+        <span class="field-hint">papers per refresh (1–50)</span>
       </div>
 
-      <button type="submit" class="btn-secondary">Save</button>
+      <div style="margin-top:20px">
+        <button type="submit" class="btn-primary">Save Settings</button>
+      </div>
     </form>
   </details>
 
-  <!-- ── Papers ── -->
+  <!-- ── Papers header ── -->
   <div class="papers-header">
     <h2>
       Recommendations
       {% if cache_age is not none %}
       <span class="cache-age">
-        (cached {{ 'just now' if cache_age < 2 else cache_age|string + 'm ago' }})
+        · cached {{ 'just now' if cache_age < 2 else cache_age|string + ' min ago' }}
       </span>
       {% endif %}
     </h2>
@@ -58,24 +67,36 @@
 
   <div id="status" class="status hidden"></div>
 
+  <!-- ── Paper list ── -->
   <div id="paperList">
     {% if not user['scholar_url'] and not user['keywords'] %}
-      <div class="empty">Set up your Scholar URL or keywords above to get recommendations.</div>
+      <div class="empty">
+        <div class="empty-icon">🔭</div>
+        Set up your Scholar URL or keywords above to get recommendations.
+      </div>
     {% elif papers %}
       {% for p in papers %}
       <div class="paper-card">
-        <a class="paper-title" href="{{ p.link }}" target="_blank">{{ loop.index }}. {{ p.title }}</a>
-        <div class="paper-meta">
-          {{ p.authors[:3] | join(', ') }}{% if p.authors | length > 3 %} et al.{% endif %}
-          · {{ p.published }}
+        <div class="paper-num">{{ loop.index }}</div>
+        <div class="paper-body">
+          <div class="paper-title">
+            <a href="{{ p.link }}" target="_blank">{{ p.title }}</a>
+          </div>
+          <div class="paper-meta">
+            <span>{{ p.authors[:3] | join(', ') }}{% if p.authors | length > 3 %} et al.{% endif %}</span>
+            <span class="paper-date">{{ p.published }}</span>
+          </div>
+          {% if p.summary %}
+          <div class="paper-abstract">{{ p.summary[:320] }}…</div>
+          {% endif %}
         </div>
-        {% if p.summary %}
-        <div class="paper-abstract">{{ p.summary[:300] }}…</div>
-        {% endif %}
       </div>
       {% endfor %}
     {% else %}
-      <div class="empty">No cached results yet. Click <strong>Refresh</strong> to fetch papers.</div>
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        No cached results yet.<br>Click <strong>Refresh</strong> to fetch your first recommendations.
+      </div>
     {% endif %}
   </div>
 
@@ -97,34 +118,41 @@ async function fetchPapers() {
     const data = await resp.json();
 
     if (!resp.ok || data.error) {
-      status.textContent = '❌ Error: ' + (data.error || resp.statusText);
+      status.textContent = '❌ ' + (data.error || resp.statusText);
       status.className = 'status error';
       return;
     }
 
     if (data.papers.length === 0) {
-      const kw = (data.keywords || []).join(', ') || '(none – check settings)';
-      list.innerHTML = `<div class="empty">No papers found.<br><small>Keywords used: <b>${esc(kw)}</b></small><br><small>Try adding more keywords in Settings.</small></div>`;
-      status.textContent = 'Done – no results found.';
+      const kw = (data.keywords || []).join(', ') || 'none – check settings';
+      list.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div>No papers found.<br><small>Keywords used: <b>${esc(kw)}</b></small></div>`;
+      status.textContent = 'No results found. Try adding more keywords in Settings.';
       status.className = 'status info';
       return;
     }
 
     list.innerHTML = data.papers.map((p, i) => {
       const authors = p.authors.slice(0, 3).join(', ') + (p.authors.length > 3 ? ' et al.' : '');
-      const abstract = p.summary ? p.summary.substring(0, 300) + '…' : '';
+      const abstract = p.summary ? p.summary.substring(0, 320) + '…' : '';
       const link = p.link.replace('http://', 'https://');
       return `
         <div class="paper-card">
-          <a class="paper-title" href="${link}" target="_blank">${i+1}. ${esc(p.title)}</a>
-          <div class="paper-meta">${esc(authors)} · ${p.published}</div>
-          ${abstract ? `<div class="paper-abstract">${esc(abstract)}</div>` : ''}
+          <div class="paper-num">${i+1}</div>
+          <div class="paper-body">
+            <div class="paper-title"><a href="${link}" target="_blank">${esc(p.title)}</a></div>
+            <div class="paper-meta">
+              <span>${esc(authors)}</span>
+              <span class="paper-date">${p.published}</span>
+            </div>
+            ${abstract ? `<div class="paper-abstract">${esc(abstract)}</div>` : ''}
+          </div>
         </div>`;
     }).join('');
 
     const kw = (data.keywords || []).join(', ');
-    status.textContent = `✓ Found ${data.papers.length} papers. Keywords: ${kw}`;
+    status.textContent = `✓ Found ${data.papers.length} papers · Keywords: ${kw}`;
     status.className = 'status ok';
+
   } catch (e) {
     status.textContent = '❌ Network error: ' + e.message;
     status.className = 'status error';
