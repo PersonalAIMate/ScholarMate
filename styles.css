@@ -252,3 +252,7 @@ textarea { resize: vertical; min-height: 70px; font-family: inherit; }
 }
 .save-row .btn-primary { flex: none; padding: 9px 28px; }
 .save-msg { font-size: 13px; color: #0a8; }
+
+/* ── ScholarMate logo ── */
+.popup-logo { height: 34px; width: auto; max-width: 100%; display: block; }
+.options-logo { height: 48px; width: auto; max-width: 100%; display: block; margin-bottom: 8px; }

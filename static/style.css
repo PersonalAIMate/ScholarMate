@@ -359,3 +359,9 @@ nav {
   .hero-right     { width: 100%; padding: 36px 24px 48px; }
   .auth-card      { max-width: 100%; }
 }
+
+/* ── ScholarMate logo ── */
+.brand-logo { height: 64px; width: auto; max-width: 100%; display: block; margin: 0 0 20px; }
+.nav-logo .nav-logo-img { height: 38px; width: auto; display: block; }
+.nav-logo { display: inline-flex; align-items: center; }
+@media (max-width: 600px) { .brand-logo { height: 48px; } .nav-logo .nav-logo-img { height: 30px; } }

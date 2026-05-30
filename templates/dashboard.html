@@ -5,7 +5,7 @@
 
 <!-- ── Nav ── -->
 <nav>
-  <span class="nav-logo">📄 Scholar<span>Mate</span></span>
+  <span class="nav-logo"><img src="{{ url_for('static', filename='logo.png') }}" alt="ScholarMate" class="nav-logo-img"></span>
   <div class="nav-right">
     <span class="nav-email">{{ user['email'] }}</span>
     <a href="{{ url_for('logout') }}">Log out</a>
