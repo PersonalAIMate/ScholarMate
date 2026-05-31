@@ -11,7 +11,21 @@ from arxiv_client import get_recommendations
 from db_adapter import get_db, init_db, query_one, execute
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'scholarmate-dev-key-change-in-prod')
+
+# SECRET_KEY signs the session cookie. A known/default value lets anyone forge a
+# session and impersonate users, so require a real one in production. Vercel sets
+# the VERCEL env var on every deployment; locally we allow an ephemeral dev key.
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    if os.environ.get('VERCEL'):
+        raise RuntimeError(
+            'SECRET_KEY environment variable is required in production. '
+            'Set it in the Vercel project settings (Settings → Environment Variables).'
+        )
+    # Local development only: a random per-process key (sessions reset on restart).
+    _secret = os.urandom(32).hex()
+    print('[WARN] SECRET_KEY not set — using an ephemeral dev key (local only).')
+app.secret_key = _secret
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -129,19 +143,6 @@ def api_papers():
     except Exception as e:
         import traceback; traceback.print_exc()
         return jsonify(error=str(e)), 500
-
-
-@app.route('/api/debug')
-@login_required
-def api_debug():
-    user = get_user(session['user_id'])
-    return jsonify({
-        'email':        user['email'],
-        'scholar_url':  user['scholar_url'],
-        'keywords':     user['keywords'],
-        'top_k':        user['top_k'],
-        'cached_count': len(json.loads(user['cached_papers'] or '[]')),
-    })
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

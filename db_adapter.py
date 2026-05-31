@@ -1,10 +1,18 @@
 """
 Database adapter: SQLite locally, Neon Postgres on Vercel.
 Vercel Neon integration injects: POSTGRES_URL (pooled) or POSTGRES_URL_NON_POOLING
-"""
-import os
 
-# Vercel Neon uses POSTGRES_URL; fallback chain covers other providers
+get_db() is a context manager that ALWAYS closes the connection on exit, so
+serverless invocations never leak Postgres connections (Neon caps them).
+"""
+import logging
+import os
+from contextlib import contextmanager
+
+log = logging.getLogger('scholarmate.db')
+
+# Vercel Neon uses POSTGRES_URL (pooled); fallback chain covers other providers.
+# Prefer the pooled URL so many short-lived serverless calls share the pool.
 _url = (
     os.environ.get('POSTGRES_URL') or
     os.environ.get('DATABASE_URL') or
@@ -20,30 +28,38 @@ if USE_POSTGRES:
 
     # Neon requires SSL; add sslmode=require if not already in the URL
     CONN_URL = _url if 'sslmode' in _url else _url + '?sslmode=require'
-    print(f'[DB] Using Postgres (Neon)')
+    log.info('Using Postgres (Neon)')
 
+    @contextmanager
     def get_db():
+        """Yield a Postgres connection; commit on success, rollback on error,
+        and ALWAYS close so the connection is returned to Neon."""
         conn = psycopg2.connect(CONN_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-        return conn
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def init_db():
-        conn = get_db()
-        with conn.cursor() as cur:
-            cur.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    id            SERIAL  PRIMARY KEY,
-                    email         TEXT    UNIQUE NOT NULL,
-                    password_hash TEXT    NOT NULL,
-                    scholar_url   TEXT    DEFAULT '',
-                    keywords      TEXT    DEFAULT '',
-                    top_k         INT     DEFAULT 10,
-                    cached_papers TEXT    DEFAULT '[]',
-                    cache_time    BIGINT  DEFAULT 0
-                )
-            ''')
-        conn.commit()
-        conn.close()
-        print('[DB] Postgres tables ready')
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute('''
+                    CREATE TABLE IF NOT EXISTS users (
+                        id            SERIAL  PRIMARY KEY,
+                        email         TEXT    UNIQUE NOT NULL,
+                        password_hash TEXT    NOT NULL,
+                        scholar_url   TEXT    DEFAULT '',
+                        keywords      TEXT    DEFAULT '',
+                        top_k         INT     DEFAULT 10,
+                        cached_papers TEXT    DEFAULT '[]',
+                        cache_time    BIGINT  DEFAULT 0
+                    )
+                ''')
+        log.info('Postgres tables ready')
 
     def query_one(conn, sql, params=()):
         with conn.cursor() as cur:
@@ -54,22 +70,32 @@ if USE_POSTGRES:
     def execute(conn, sql, params=()):
         with conn.cursor() as cur:
             cur.execute(sql.replace('?', '%s'), params)
-        conn.commit()
+        # commit handled by get_db() context manager on clean exit
 
 else:
     import sqlite3
 
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scholarmate.db')
-    print(f'[DB] Using SQLite: {DB_PATH}')
+    log.info('Using SQLite: %s', DB_PATH)
 
+    @contextmanager
     def get_db():
-        db = sqlite3.connect(DB_PATH)
-        db.row_factory = sqlite3.Row
-        return db
+        """Yield a SQLite connection; commit on success, rollback on error,
+        and ALWAYS close it."""
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def init_db():
-        with get_db() as db:
-            db.execute('''
+        with get_db() as conn:
+            conn.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     id            INTEGER PRIMARY KEY AUTOINCREMENT,
                     email         TEXT    UNIQUE NOT NULL,
@@ -81,10 +107,11 @@ else:
                     cache_time    INTEGER DEFAULT 0
                 )
             ''')
-        print(f'[DB] SQLite tables ready')
+        log.info('SQLite tables ready')
 
     def query_one(conn, sql, params=()):
         return conn.execute(sql, params).fetchone()
 
     def execute(conn, sql, params=()):
         conn.execute(sql, params)
+        # commit handled by get_db() context manager on clean exit
