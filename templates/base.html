@@ -8,6 +8,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}ScholarMate{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <!-- Vercel Web Analytics. No-op unless Analytics is enabled for the project
+       in the Vercel dashboard (Project → Analytics → Enable). -->
+  <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
   {% block body %}{% endblock %}

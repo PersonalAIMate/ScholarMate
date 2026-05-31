@@ -81,7 +81,7 @@ async function fetchScholarKeywords(scholarUrl) {
 // ──────────────────────────────────────────────
 // arXiv API
 // ──────────────────────────────────────────────
-async function searchArxiv(keywords, maxResults = 20) {
+async function searchArxiv(keywords, maxResults = 30) {
   const query = keywords
     .map((k) => `all:"${k}"`)
     .join(' OR ');
@@ -128,18 +128,47 @@ function parseArxivXML(xml) {
 }
 
 // ──────────────────────────────────────────────
-// Ranking: score each article by keyword overlap
+// TF-IDF ranking
+// MIRRORS arxiv_client.py → rank_papers. Keep both in sync: same tf/idf
+// formula, same smoothing, same 0.5*idf title bonus.
 // ──────────────────────────────────────────────
+function tokenize(text) {
+  return (text.toLowerCase().match(/[a-z0-9]+/g) || []);
+}
+
 function rankPapers(papers, keywords) {
+  const kws = keywords.map((k) => (k || '').toLowerCase()).filter((k) => k.trim());
+  if (papers.length === 0 || kws.length === 0) return papers.slice();
+
+  const nDocs = papers.length;
+  const docs = papers.map((p) => {
+    const titleL = (p.title || '').toLowerCase();
+    const fullL = ((p.title || '') + ' ' + (p.summary || '')).toLowerCase();
+    return { titleL, fullL, ntok: Math.max(1, tokenize(fullL).length) };
+  });
+
+  // document frequency per keyword (substring match across the corpus)
+  const df = {};
+  for (const kw of kws) {
+    df[kw] = docs.reduce((acc, d) => acc + (d.fullL.includes(kw) ? 1 : 0), 0);
+  }
+
+  const countOccurrences = (hay, needle) => {
+    if (!needle) return 0;
+    let n = 0, i = 0;
+    while ((i = hay.indexOf(needle, i)) !== -1) { n++; i += needle.length; }
+    return n;
+  };
+
   return papers
-    .map((p) => {
-      const text = (p.title + ' ' + p.summary).toLowerCase();
+    .map((p, idx) => {
+      const d = docs[idx];
       let score = 0;
-      for (const kw of keywords) {
-        const kwl = kw.toLowerCase();
-        const count = (text.match(new RegExp(kwl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-        score += count;
-        if (p.title.toLowerCase().includes(kwl)) score += 5; // title bonus
+      for (const kw of kws) {
+        const idf = Math.log((nDocs + 1) / (1 + df[kw])) + 1.0;
+        const tf = countOccurrences(d.fullL, kw) / d.ntok;
+        score += tf * idf;
+        if (d.titleL.includes(kw)) score += 0.5 * idf; // title hit bonus, scaled by rarity
       }
       return { ...p, score };
     })

@@ -1,3 +1,9 @@
-flask>=3.0
-requests>=2.31
-psycopg2-binary>=2.9
+# Pin to compatible major ranges so a future major release can't break the
+# Vercel build unexpectedly. Bump deliberately when upgrading.
+flask>=3.0,<4.0
+requests>=2.31,<3.0
+psycopg2-binary>=2.9,<3.0
+
+# Optional error monitoring. Only active when SENTRY_DSN is set (see app.py);
+# the package just needs to be importable.
+sentry-sdk[flask]>=2.0,<3.0

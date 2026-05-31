@@ -1,8 +1,21 @@
-"""arXiv search + Google Scholar keyword extraction."""
+"""arXiv search + Google Scholar keyword extraction + TF-IDF ranking.
+
+Ranking note
+------------
+The TF-IDF ranking in `rank_papers` is intentionally MIRRORED in the browser
+extension (background.js → rankPapers). If you change the formula, scoring
+constants, or tokenisation here, update background.js too so the web app and
+the extension produce consistent results.
+"""
+import logging
+import math
 import re
 import urllib.parse
-import requests
 import xml.etree.ElementTree as ET
+
+import requests
+
+log = logging.getLogger('scholarmate.arxiv')
 
 HEADERS = {
     'User-Agent': (
@@ -35,7 +48,7 @@ def fetch_scholar_keywords(scholar_url):
 
         return interests, titles[:10]
     except Exception as e:
-        print(f'[Scholar] fetch failed: {e}')
+        log.warning('Scholar fetch failed: %s', e)
         return [], []
 
 
@@ -68,7 +81,7 @@ def search_arxiv(keywords, max_results=30):
         '&sortBy=submittedDate&sortOrder=descending'
     ).format(urllib.parse.quote(query), max_results)
 
-    print(f'[arXiv] GET {url[:120]}...')
+    log.info('arXiv GET %s...', url[:120])
     try:
         resp = requests.get(url, timeout=20)
         resp.raise_for_status()
@@ -77,7 +90,7 @@ def search_arxiv(keywords, max_results=30):
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f'Could not reach arXiv ({e.__class__.__name__}). Please try again.')
     papers = _parse_xml(resp.text)
-    print(f'[arXiv] got {len(papers)} entries')
+    log.info('arXiv returned %d entries', len(papers))
     return papers
 
 
@@ -86,7 +99,7 @@ def _parse_xml(xml_text):
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError as e:
-        print(f'[arXiv] XML parse error: {e}')
+        log.warning('arXiv XML parse error: %s', e)
         return []
 
     papers = []
@@ -112,37 +125,73 @@ def _parse_xml(xml_text):
     return papers
 
 
-def _score(paper, keywords):
-    text = (paper['title'] + ' ' + paper['summary']).lower()
-    s = 0
-    for kw in keywords:
-        kl = kw.lower()
-        s += text.count(kl)
-        if kl in paper['title'].lower():
-            s += 5
-    return s
+# ── TF-IDF ranking ──────────────────────────────────────────────────────────────
+# MIRRORED in background.js (rankPapers). Keep both implementations in sync.
+
+_TOKEN_RE = re.compile(r'[a-z0-9]+')
+
+
+def _tokens(text):
+    return _TOKEN_RE.findall(text.lower())
+
+
+def rank_papers(papers, keywords):
+    """Rank papers by summed TF-IDF over the keyword set, with a title bonus.
+
+    For each keyword phrase:
+      tf  = (occurrences in title+abstract) / (token count of that doc)
+      idf = ln((N + 1) / (1 + df)) + 1     # smoothed; df = docs containing the phrase
+    score = Σ tf*idf over keywords, plus 0.5*idf when the phrase appears in the
+    title. Rarer keywords (low df across the result set) thus weigh more than
+    ones that match nearly everything, which plain count-based scoring missed.
+    """
+    kws = [k.lower() for k in keywords if k and k.strip()]
+    if not papers or not kws:
+        return list(papers)
+
+    n_docs = len(papers)
+    docs = []  # (title_lower, full_lower, token_count)
+    for p in papers:
+        title_l = p['title'].lower()
+        full_l = (p['title'] + ' ' + p.get('summary', '')).lower()
+        docs.append((title_l, full_l, max(1, len(_tokens(full_l)))))
+
+    # document frequency per keyword (substring match across the corpus)
+    df = {kw: sum(1 for (_t, full, _n) in docs if kw in full) for kw in kws}
+
+    scored = []
+    for paper, (title_l, full_l, ntok) in zip(papers, docs):
+        score = 0.0
+        for kw in kws:
+            idf = math.log((n_docs + 1) / (1 + df[kw])) + 1.0
+            tf = full_l.count(kw) / ntok
+            score += tf * idf
+            if kw in title_l:
+                score += 0.5 * idf       # title hit bonus, scaled by rarity
+        scored.append((score, paper))
+
+    scored.sort(key=lambda sp: sp[0], reverse=True)
+    return [p for _s, p in scored]
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def get_recommendations(scholar_url, keywords_str, top_k):
-    """Return top-k ranked papers. Also returns the keywords used."""
+    """Return (top_k ranked papers, keywords used)."""
     keywords = []
-    scholar_ok = False
 
     if scholar_url:
         interests, titles = fetch_scholar_keywords(scholar_url)
-        print(f'[Scholar] interests={interests}, titles_count={len(titles)}')
+        log.info('Scholar interests=%s titles=%d', interests, len(titles))
         keywords = build_keywords(interests, titles)
-        scholar_ok = bool(keywords)
 
     if not keywords and keywords_str:
         keywords = [k.strip() for k in keywords_str.split(',') if k.strip()]
 
-    print(f'[Recommend] keywords={keywords}')
+    log.info('recommend with keywords=%s', keywords)
     if not keywords:
         return [], []
 
     papers = search_arxiv(keywords, max_results=max(top_k * 3, 30))
-    ranked = sorted(papers, key=lambda p: _score(p, keywords), reverse=True)
+    ranked = rank_papers(papers, keywords)
     return ranked[:top_k], keywords

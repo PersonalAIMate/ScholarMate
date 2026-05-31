@@ -11,8 +11,27 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from arxiv_client import get_recommendations
 from db_adapter import IntegrityError, get_db, init_db, query_one, execute
+from emailer import email_enabled, render_digest, send_email
 
+logging.basicConfig(
+    level=os.environ.get('LOG_LEVEL', 'INFO'),
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+)
 log = logging.getLogger('scholarmate')
+
+# Optional error monitoring — active only when SENTRY_DSN is set.
+if os.environ.get('SENTRY_DSN'):
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        sentry_sdk.init(
+            dsn=os.environ['SENTRY_DSN'],
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.0')),
+        )
+        log.info('Sentry error monitoring enabled')
+    except Exception:
+        log.exception('Sentry init failed; continuing without it')
 
 app = Flask(__name__)
 
@@ -28,7 +47,7 @@ if not _secret:
         )
     # Local development only: a random per-process key (sessions reset on restart).
     _secret = os.urandom(32).hex()
-    print('[WARN] SECRET_KEY not set — using an ephemeral dev key (local only).')
+    log.warning('SECRET_KEY not set — using an ephemeral dev key (local only).')
 app.secret_key = _secret
 
 
@@ -215,7 +234,7 @@ def settings():
 @login_required
 def api_papers():
     user = get_user(session['user_id'])
-    print(f'[API] scholar_url={user["scholar_url"]!r} keywords={user["keywords"]!r} top_k={user["top_k"]}')
+    log.info('api_papers user=%s top_k=%s', user['id'], user['top_k'])
     try:
         papers, used_keywords = get_recommendations(
             user['scholar_url'], user['keywords'], user['top_k']
@@ -228,8 +247,73 @@ def api_papers():
                 )
         return jsonify(papers=papers, keywords=used_keywords)
     except Exception as e:
-        import traceback; traceback.print_exc()
+        log.exception('api_papers failed for user=%s', user['id'])
         return jsonify(error=str(e)), 500
+
+
+# ── Scheduled digest (Vercel Cron) ──────────────────────────────────────────────
+# Triggered by the cron entry in vercel.json. Protected by CRON_SECRET: Vercel
+# sends it as the Bearer token, and we also accept ?key= for manual testing.
+# Sends each user with email + a paper source a fresh recommendations digest.
+
+def _cron_authorized():
+    expected = os.environ.get('CRON_SECRET')
+    if not expected:
+        return False  # disabled until a secret is configured
+    auth = request.headers.get('Authorization', '')
+    if auth == f'Bearer {expected}':
+        return True
+    return secrets.compare_digest(request.args.get('key', ''), expected)
+
+
+@app.route('/api/cron/digest')
+def cron_digest():
+    if not _cron_authorized():
+        abort(401)
+    if not email_enabled():
+        # Framework is wired up but no SMTP provider configured yet.
+        return jsonify(ok=False, reason='email_not_configured'), 200
+
+    with get_db() as db:
+        rows = _fetch_digest_users(db)
+
+    sent, failed = 0, 0
+    for u in rows:
+        try:
+            papers, kws = get_recommendations(u['scholar_url'], u['keywords'], u['top_k'])
+            if not papers:
+                continue
+            body = render_digest(u['email'], papers, kws)
+            subject = f'ScholarMate · {len(papers)} new paper recommendations'
+            if send_email(u['email'], subject, body):
+                sent += 1
+                with get_db() as db2:
+                    execute(db2,
+                        'UPDATE users SET cached_papers=?, cache_time=? WHERE id=?',
+                        (json.dumps(papers, ensure_ascii=False), int(time.time()), u['id']))
+            else:
+                failed += 1
+        except Exception:
+            failed += 1
+            log.exception('digest failed for user=%s', u.get('id'))
+
+    log.info('cron digest done: sent=%d failed=%d total=%d', sent, failed, len(rows))
+    return jsonify(ok=True, sent=sent, failed=failed, total=len(rows))
+
+
+def _is_sqlite(db):
+    return db.__class__.__module__.startswith('sqlite3')
+
+
+def _fetch_digest_users(db):
+    """Return list of dict users eligible for the digest, on either backend."""
+    sql = ("SELECT id, email, scholar_url, keywords, top_k FROM users "
+           "WHERE email <> '' AND (scholar_url <> '' OR keywords <> '')")
+    if _is_sqlite(db):
+        return [dict(r) for r in db.execute(sql).fetchall()]
+    with db.cursor() as cur:
+        cur.execute(sql)
+        return [dict(r) for r in cur.fetchall()]
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
