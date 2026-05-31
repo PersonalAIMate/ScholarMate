@@ -53,6 +53,7 @@
       {% endif %}
 
       <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Email</label>
         <input type="email" name="email" required autofocus placeholder="you@example.com">
         <label>Password</label>

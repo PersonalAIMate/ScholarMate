@@ -23,6 +23,7 @@
     </summary>
 
     <form method="post" action="{{ url_for('settings') }}" class="settings-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <div class="field">
         <label>Google Scholar Profile URL <span class="hint">optional</span></label>

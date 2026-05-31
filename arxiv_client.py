@@ -16,9 +16,13 @@ HEADERS = {
 # ── Scholar ──────────────────────────────────────────────────────────────────
 
 def fetch_scholar_keywords(scholar_url):
-    """Return (interests, paper_titles) from a Scholar profile page."""
+    """Return (interests, paper_titles) from a Scholar profile page.
+
+    Best-effort: any failure (timeout, block, captcha, markup change) returns
+    empty lists so the caller can fall back to manual keywords.
+    """
     try:
-        resp = requests.get(scholar_url, headers=HEADERS, timeout=15)
+        resp = requests.get(scholar_url, headers=HEADERS, timeout=10)
         html = resp.text
 
         # Research interest tags
@@ -65,8 +69,13 @@ def search_arxiv(keywords, max_results=30):
     ).format(urllib.parse.quote(query), max_results)
 
     print(f'[arXiv] GET {url[:120]}...')
-    resp = requests.get(url, timeout=25)
-    resp.raise_for_status()
+    try:
+        resp = requests.get(url, timeout=20)
+        resp.raise_for_status()
+    except requests.exceptions.Timeout:
+        raise RuntimeError('arXiv took too long to respond. Please try again in a moment.')
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f'Could not reach arXiv ({e.__class__.__name__}). Please try again.')
     papers = _parse_xml(resp.text)
     print(f'[arXiv] got {len(papers)} entries')
     return papers

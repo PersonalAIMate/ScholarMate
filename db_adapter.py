@@ -44,6 +44,9 @@ if USE_POSTGRES:
         finally:
             conn.close()
 
+    # Raised on UNIQUE constraint violations (e.g. duplicate email)
+    IntegrityError = psycopg2.IntegrityError
+
     def init_db():
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -59,6 +62,16 @@ if USE_POSTGRES:
                         cache_time    BIGINT  DEFAULT 0
                     )
                 ''')
+                cur.execute('''
+                    CREATE TABLE IF NOT EXISTS login_attempts (
+                        ip           TEXT    NOT NULL,
+                        attempt_time BIGINT  NOT NULL
+                    )
+                ''')
+                cur.execute(
+                    'CREATE INDEX IF NOT EXISTS idx_login_attempts_ip '
+                    'ON login_attempts (ip, attempt_time)'
+                )
         log.info('Postgres tables ready')
 
     def query_one(conn, sql, params=()):
@@ -93,6 +106,9 @@ else:
         finally:
             conn.close()
 
+    # Raised on UNIQUE constraint violations (e.g. duplicate email)
+    IntegrityError = sqlite3.IntegrityError
+
     def init_db():
         with get_db() as conn:
             conn.execute('''
@@ -107,6 +123,16 @@ else:
                     cache_time    INTEGER DEFAULT 0
                 )
             ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS login_attempts (
+                    ip           TEXT    NOT NULL,
+                    attempt_time INTEGER NOT NULL
+                )
+            ''')
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_login_attempts_ip '
+                'ON login_attempts (ip, attempt_time)'
+            )
         log.info('SQLite tables ready')
 
     def query_one(conn, sql, params=()):
