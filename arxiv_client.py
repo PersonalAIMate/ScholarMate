@@ -10,6 +10,7 @@ the extension produce consistent results.
 import logging
 import math
 import re
+import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 
@@ -23,6 +24,12 @@ HEADERS = {
         'AppleWebKit/537.36 (KHTML, like Gecko) '
         'Chrome/122.0.0.0 Safari/537.36'
     )
+}
+
+# arXiv's API guidelines ask for a descriptive User-Agent identifying the app
+# (and ideally a contact). A bare/browser-spoofing agent is throttled harder.
+ARXIV_HEADERS = {
+    'User-Agent': 'ScholarMate/1.0 (https://github.com/; mailto:gushangding@gmail.com)'
 }
 
 
@@ -73,6 +80,13 @@ def build_keywords(interests, titles):
 
 # ── arXiv ─────────────────────────────────────────────────────────────────────
 
+# arXiv throttles bursts and asks clients to back off on 429/503 and honour
+# the Retry-After header. We retry transient errors with exponential backoff.
+_RETRY_STATUSES = (429, 503)
+_MAX_ATTEMPTS = 4
+_BASE_BACKOFF = 3.0  # seconds; arXiv's API guideline is ~3s between requests
+
+
 def search_arxiv(keywords, max_results=30):
     query = ' OR '.join('all:"{}"'.format(k) for k in keywords)
     url = (
@@ -82,16 +96,54 @@ def search_arxiv(keywords, max_results=30):
     ).format(urllib.parse.quote(query), max_results)
 
     log.info('arXiv GET %s...', url[:120])
-    try:
-        resp = requests.get(url, timeout=20)
-        resp.raise_for_status()
-    except requests.exceptions.Timeout:
-        raise RuntimeError('arXiv took too long to respond. Please try again in a moment.')
-    except requests.exceptions.RequestException as e:
-        raise RuntimeError(f'Could not reach arXiv ({e.__class__.__name__}). Please try again.')
-    papers = _parse_xml(resp.text)
-    log.info('arXiv returned %d entries', len(papers))
-    return papers
+    last_exc = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            resp = requests.get(url, headers=ARXIV_HEADERS, timeout=20)
+            if resp.status_code in _RETRY_STATUSES and attempt < _MAX_ATTEMPTS:
+                wait = _retry_after_seconds(resp, attempt)
+                log.warning('arXiv %s (attempt %d/%d), retrying in %.1fs',
+                            resp.status_code, attempt, _MAX_ATTEMPTS, wait)
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            papers = _parse_xml(resp.text)
+            log.info('arXiv returned %d entries', len(papers))
+            return papers
+        except requests.exceptions.Timeout as e:
+            last_exc = e
+            if attempt < _MAX_ATTEMPTS:
+                wait = _BASE_BACKOFF * (2 ** (attempt - 1))
+                log.warning('arXiv timeout (attempt %d/%d), retrying in %.1fs',
+                            attempt, _MAX_ATTEMPTS, wait)
+                time.sleep(wait)
+                continue
+            raise RuntimeError('arXiv took too long to respond. Please try again in a moment.')
+        except requests.exceptions.RequestException as e:
+            last_exc = e
+            if attempt < _MAX_ATTEMPTS:
+                wait = _BASE_BACKOFF * (2 ** (attempt - 1))
+                log.warning('arXiv error %s (attempt %d/%d), retrying in %.1fs',
+                            e.__class__.__name__, attempt, _MAX_ATTEMPTS, wait)
+                time.sleep(wait)
+                continue
+            raise RuntimeError(
+                f'Could not reach arXiv ({e.__class__.__name__}). Please try again.')
+
+    # Exhausted retries (e.g. repeated 429/503).
+    name = last_exc.__class__.__name__ if last_exc else 'HTTPError'
+    raise RuntimeError(f'arXiv is busy right now ({name}). Please try again in a moment.')
+
+
+def _retry_after_seconds(resp, attempt):
+    """Seconds to wait before retrying, honouring Retry-After when present."""
+    header = resp.headers.get('Retry-After')
+    if header:
+        try:
+            return max(0.0, float(header))
+        except ValueError:
+            pass  # HTTP-date form is uncommon for arXiv; fall through to backoff
+    return _BASE_BACKOFF * (2 ** (attempt - 1))
 
 
 def _parse_xml(xml_text):
