@@ -104,6 +104,53 @@
 </div>
 
 <script>
+let cooldownTimer = null;
+
+function renderPapers(papers) {
+  const list = document.getElementById('paperList');
+  list.innerHTML = papers.map((p, i) => {
+    const authors = p.authors.slice(0, 3).join(', ') + (p.authors.length > 3 ? ' et al.' : '');
+    const abstract = p.summary ? p.summary.substring(0, 320) + '…' : '';
+    const link = p.link.replace('http://', 'https://');
+    return `
+      <div class="paper-card">
+        <div class="paper-num">${i+1}</div>
+        <div class="paper-body">
+          <div class="paper-title"><a href="${link}" target="_blank">${esc(p.title)}</a></div>
+          <div class="paper-meta">
+            <span>${esc(authors)}</span>
+            <span class="paper-date">${p.published}</span>
+          </div>
+          ${abstract ? `<div class="paper-abstract">${esc(abstract)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// Disable Refresh for `seconds` with a live countdown so users don't keep
+// hammering arXiv during the throttle window.
+function startCooldown(seconds) {
+  const btn = document.getElementById('refreshBtn');
+  clearInterval(cooldownTimer);
+  cooldownTimer = null;
+  let left = Math.ceil(seconds);
+  if (left <= 0) { btn.disabled = false; btn.textContent = '🔄 Refresh'; return; }
+  btn.disabled = true;
+  const tick = () => {
+    if (left <= 0) {
+      clearInterval(cooldownTimer);
+      cooldownTimer = null;
+      btn.disabled = false;
+      btn.textContent = '🔄 Refresh';
+      return;
+    }
+    btn.textContent = `🔄 Refresh (${left}s)`;
+    left -= 1;
+  };
+  tick();
+  cooldownTimer = setInterval(tick, 1000);
+}
+
 async function fetchPapers() {
   const btn    = document.getElementById('refreshBtn');
   const status = document.getElementById('status');
@@ -111,20 +158,25 @@ async function fetchPapers() {
 
   btn.disabled    = true;
   btn.textContent = '⏳ Fetching…';
+  status.classList.remove('hidden');
   status.textContent = 'Searching arXiv – this may take a few seconds…';
   status.className = 'status info';
 
+  let cooling = false;
   try {
     const resp = await fetch('/api/papers');
     const data = await resp.json();
 
-    if (!resp.ok || data.error) {
+    // Hard failure: no cached fallback was available server-side.
+    if (!resp.ok) {
       status.textContent = '❌ ' + (data.error || resp.statusText);
       status.className = 'status error';
       return;
     }
 
-    if (data.papers.length === 0) {
+    const papers = data.papers || [];
+
+    if (papers.length === 0) {
       const kw = (data.keywords || []).join(', ') || 'none – check settings';
       list.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div>No papers found.<br><small>Keywords used: <b>${esc(kw)}</b></small></div>`;
       status.textContent = 'No results found. Try adding more keywords in Settings.';
@@ -132,34 +184,38 @@ async function fetchPapers() {
       return;
     }
 
-    list.innerHTML = data.papers.map((p, i) => {
-      const authors = p.authors.slice(0, 3).join(', ') + (p.authors.length > 3 ? ' et al.' : '');
-      const abstract = p.summary ? p.summary.substring(0, 320) + '…' : '';
-      const link = p.link.replace('http://', 'https://');
-      return `
-        <div class="paper-card">
-          <div class="paper-num">${i+1}</div>
-          <div class="paper-body">
-            <div class="paper-title"><a href="${link}" target="_blank">${esc(p.title)}</a></div>
-            <div class="paper-meta">
-              <span>${esc(authors)}</span>
-              <span class="paper-date">${p.published}</span>
-            </div>
-            ${abstract ? `<div class="paper-abstract">${esc(abstract)}</div>` : ''}
-          </div>
-        </div>`;
-    }).join('');
-
+    renderPapers(papers);
     const kw = (data.keywords || []).join(', ');
-    status.textContent = `✓ Found ${data.papers.length} papers · Keywords: ${kw}`;
+
+    if (data.throttled) {
+      // Served from cache to avoid re-triggering arXiv's rate limit.
+      const age = data.cache_age != null ? `${data.cache_age}s ago` : 'recently';
+      status.textContent = `⏳ Showing cached results (fetched ${age}). Refresh again in ${data.retry_after}s to avoid arXiv rate limits.`;
+      status.className = 'status info';
+      cooling = true;
+      startCooldown(data.retry_after || 0);
+      return;
+    }
+
+    if (data.stale) {
+      // arXiv was unavailable; fell back to the last saved results.
+      status.textContent = `⚠️ arXiv is unavailable right now (${esc(data.error || 'error')}) — showing your last saved results.`;
+      status.className = 'status error';
+      return;
+    }
+
+    status.textContent = `✓ Found ${papers.length} papers · Keywords: ${kw}`;
     status.className = 'status ok';
 
   } catch (e) {
     status.textContent = '❌ Network error: ' + e.message;
     status.className = 'status error';
   } finally {
-    btn.disabled    = false;
-    btn.textContent = '🔄 Refresh';
+    // Leave the button to the cooldown countdown if one was started.
+    if (!cooling) {
+      btn.disabled    = false;
+      btn.textContent = '🔄 Refresh';
+    }
   }
 }
 

@@ -98,6 +98,13 @@ def csrf_ok():
 LOGIN_MAX_ATTEMPTS = 8          # failed attempts allowed per window, per IP
 LOGIN_WINDOW_SEC   = 15 * 60    # rolling window: 15 minutes
 
+# ── arXiv refresh throttle ──────────────────────────────────────────────────────
+# arXiv rate-limits bursts (HTTP 429). To avoid re-triggering it, a Refresh within
+# this window of the last successful fetch serves the cached papers instead of
+# hitting arXiv again. Per-user, DB-backed (cache_time), so it holds across the
+# stateless serverless invocations on Vercel.
+REFRESH_MIN_INTERVAL_SEC = int(os.environ.get('REFRESH_MIN_INTERVAL_SEC', '60'))
+
 
 def _client_ip():
     # On Vercel the real client IP is the first entry of X-Forwarded-For.
@@ -230,11 +237,37 @@ def settings():
 
 # ── Paper API ─────────────────────────────────────────────────────────────────
 
+def _manual_keywords(user):
+    """Keywords parsed from the user's settings, for labelling cached responses."""
+    return [k.strip() for k in (user['keywords'] or '').split(',') if k.strip()]
+
+
 @app.route('/api/papers')
 @login_required
 def api_papers():
     user = get_user(session['user_id'])
     log.info('api_papers user=%s top_k=%s', user['id'], user['top_k'])
+
+    now = int(time.time())
+    cache_time = user['cache_time'] or 0
+    cached_papers = json.loads(user['cached_papers'] or '[]')
+    age = now - cache_time if cache_time else None
+
+    # Throttle: a Refresh shortly after the last successful fetch serves the
+    # cache instead of hitting arXiv, so repeated clicks can't re-trip the limit.
+    if cached_papers and age is not None and age < REFRESH_MIN_INTERVAL_SEC:
+        retry_after = REFRESH_MIN_INTERVAL_SEC - age
+        log.info('api_papers throttled user=%s age=%ss retry_after=%ss',
+                 user['id'], age, retry_after)
+        return jsonify(
+            papers=cached_papers,
+            keywords=_manual_keywords(user),
+            cached=True,
+            throttled=True,
+            cache_age=age,
+            retry_after=retry_after,
+        )
+
     try:
         papers, used_keywords = get_recommendations(
             user['scholar_url'], user['keywords'], user['top_k']
@@ -243,11 +276,22 @@ def api_papers():
             with get_db() as db:
                 execute(db,
                     'UPDATE users SET cached_papers=?, cache_time=? WHERE id=?',
-                    (json.dumps(papers, ensure_ascii=False), int(time.time()), user['id'])
+                    (json.dumps(papers, ensure_ascii=False), now, user['id'])
                 )
-        return jsonify(papers=papers, keywords=used_keywords)
+        return jsonify(papers=papers, keywords=used_keywords, cached=False, cache_age=0)
     except Exception as e:
         log.exception('api_papers failed for user=%s', user['id'])
+        # Graceful fallback: arXiv is unavailable (rate-limited/timeout), so serve
+        # the last saved results instead of failing the whole Refresh.
+        if cached_papers:
+            return jsonify(
+                papers=cached_papers,
+                keywords=_manual_keywords(user),
+                cached=True,
+                stale=True,
+                cache_age=age,
+                error=str(e),
+            )
         return jsonify(error=str(e)), 500
 
 
