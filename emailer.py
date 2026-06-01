@@ -82,9 +82,11 @@ def render_digest(email, papers, keywords):
         if len(authors_list) > 3:
             authors += ' et al.'
         link = (p.get('link') or '').replace('http://', 'https://')
+        source = p.get('source', '')
         lines.append(f'{i}. {p.get("title", "")}')
-        if authors:
-            lines.append(f'   {authors} · {p.get("published", "")}')
+        meta = ' · '.join(x for x in (source, authors, p.get('published', '')) if x)
+        if meta:
+            lines.append(f'   {meta}')
         lines.append(f'   {link}')
         lines.append('')
 

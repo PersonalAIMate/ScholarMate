@@ -2,9 +2,12 @@
 
 **Live site:** https://scholarmate.org
 
-ScholarMate recommends the latest, most relevant arXiv papers for you — based on
-your Google Scholar profile or a set of keywords — and can email them to you on a
-schedule. It ships in two forms that share the same recommendation logic:
+ScholarMate recommends the latest, most relevant papers from across the web for
+you — based on your Google Scholar profile or a set of keywords — and can email
+them to you on a schedule. Each recommendation is tagged with its **source
+venue/platform** (e.g. *Nature*, *IEEE Robotics & Automation Letters*,
+*NeurIPS*, *arXiv*). It ships in two forms that share the same recommendation
+logic:
 
 - **Web app** (Flask, deployed on Vercel) — accounts, dashboard, scheduled email digests.
 - **Chrome extension** — popup + options, fetches Scholar from *your* browser to
@@ -16,10 +19,23 @@ schedule. It ships in two forms that share the same recommendation logic:
 
 1. **Keywords** — from your Scholar profile (research interests + frequent words
    in your paper titles) or a manual comma-separated list.
-2. **Search** — queries the public [arXiv API](https://info.arxiv.org/help/api/)
-   for recent submissions matching those keywords.
-3. **Rank** — scores each paper by **TF-IDF** over the keyword set (rarer
-   keywords weigh more), plus a title-match bonus, and returns the top *K*.
+2. **Search** — queries several free, keyless scholarly APIs **concurrently** for
+   recent papers matching those keywords: [arXiv](https://info.arxiv.org/help/api/),
+   [OpenAlex](https://openalex.org/), [Crossref](https://www.crossref.org/),
+   [Semantic Scholar](https://www.semanticscholar.org/product/api), and
+   [Europe PMC](https://europepmc.org/). These aggregators index Nature, Science,
+   IEEE, ACM, the major conferences, etc., so the real venue is shown as each
+   paper's source badge. Each source is **best-effort** — if one is rate-limited
+   or down, the others still return results.
+3. **Merge & rank** — results are de-duplicated by title (a paper found on
+   multiple platforms shows e.g. `arXiv · Nature`), then scored by **TF-IDF**
+   over the keyword set (rarer keywords weigh more), plus a title-match bonus,
+   and the top *K* are returned.
+
+> Google Scholar has no public API and blocks scraping, so it is **not** a fetch
+> source — your Scholar *profile URL* is only used to derive keywords. The web
+> app also throttles Refresh (serving cache within `REFRESH_MIN_INTERVAL_SEC`)
+> and falls back to your last cached results when sources are unavailable.
 
 > The ranking is implemented twice — `arxiv_client.py` (`rank_papers`) for the
 > web app and `background.js` (`rankPapers`) for the extension. They are kept
@@ -31,7 +47,8 @@ schedule. It ships in two forms that share the same recommendation logic:
 
 ```
 app.py            Flask app: auth, dashboard, /api/papers, /api/cron/digest
-arxiv_client.py   Scholar scraping + arXiv search + TF-IDF ranking (web)
+paper_sources.py  Multi-source fetch (arXiv/OpenAlex/Crossref/S2/EuropePMC) + merge
+arxiv_client.py   Scholar keyword extraction + arXiv search + TF-IDF ranking (web)
 db_adapter.py     DB layer: SQLite locally, Neon Postgres on Vercel
 emailer.py        SMTP email sending + digest rendering
 templates/        Jinja templates (base, login, register, dashboard)
@@ -76,6 +93,10 @@ With no `POSTGRES_URL` set, it uses a local SQLite file (`scholarmate.db`).
 | `SENTRY_DSN` | No | Enables Sentry error monitoring when set. |
 | `SENTRY_TRACES_SAMPLE_RATE` | No | Sentry performance sample rate (default `0.0`). |
 | `LOG_LEVEL` | No | Logging level (default `INFO`). |
+| `SOURCES` | No | Comma list of enabled paper sources (default `arxiv,openalex,crossref,semantic_scholar,europepmc`). |
+| `RECENCY_DAYS` | No | "Latest" window in days for date-bounded sources (default `365`). |
+| `CONTACT_EMAIL` | No | Contact passed to OpenAlex/Crossref for polite, higher-rate API access. |
+| `REFRESH_MIN_INTERVAL_SEC` | No | Min seconds between live fetches per user; Refresh serves cache within this window (default `60`). |
 
 ---
 

@@ -9,7 +9,7 @@ from flask import (Flask, abort, jsonify, redirect, render_template,
                    request, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from arxiv_client import get_recommendations
+from paper_sources import get_recommendations
 from db_adapter import IntegrityError, get_db, init_db, query_one, execute
 from emailer import email_enabled, render_digest, send_email
 

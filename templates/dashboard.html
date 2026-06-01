@@ -84,6 +84,7 @@
             <a href="{{ p.link }}" target="_blank">{{ p.title }}</a>
           </div>
           <div class="paper-meta">
+            {% if p.source %}<span class="paper-source">{{ p.source }}</span>{% endif %}
             <span>{{ p.authors[:3] | join(', ') }}{% if p.authors | length > 3 %} et al.{% endif %}</span>
             <span class="paper-date">{{ p.published }}</span>
           </div>
@@ -118,6 +119,7 @@ function renderPapers(papers) {
         <div class="paper-body">
           <div class="paper-title"><a href="${link}" target="_blank">${esc(p.title)}</a></div>
           <div class="paper-meta">
+            ${p.source ? `<span class="paper-source">${esc(p.source)}</span>` : ''}
             <span>${esc(authors)}</span>
             <span class="paper-date">${p.published}</span>
           </div>
